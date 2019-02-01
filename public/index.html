@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="ie=edge">
+  <title>webrtc-demo</title>
+</head>
+<body>
+  <input type="text" id="room-name">
+  <button id="bt-join" disabled>join</button>
+  <button id="bt-call" disabled>call</button>
+  <video id="local-stream"></video>
+  <video id="remote-stream"></video>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/2.2.0/socket.io.dev.js"></script>
+  <script>
+    const roomName = document.getElementById("room-name")
+    const btJoin = document.getElementById("bt-join")
+    const btCall = document.getElementById("bt-call")
+    const localVideo = document.getElementById("local-stream")
+    const remoteVideo = document.getElementById("remote-stream")
+
+    roomName.addEventListener('input', e => {
+      if (e.currentTarget.value) {
+        btJoin.disabled = false
+      }
+    })
+
+    btJoin.addEventListener('click', join)
+    btCall.addEventListener('click', call)
+
+    const socket = io()
+    socket.on('custom error', error => {
+      console.log(error)
+    })
+
+    const pc = new RTCPeerConnection()
+
+    function join() {
+      btJoin.disabled = true
+      const name = roomName.value
+      socket.emit('join', {name: name})
+      socket.on('join success', () => {
+        console.log("===========join success=============")
+      })
+      socket.on('another', () => {
+        btCall.disabled = false
+      })
+    }
+
+    async function call() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: true
+        })
+        localVideo.srcObject = stream
+        pc.addStream(stream)
+        const localSdp = await pc.createOffer()
+        await pc.setLocalDescription(localSdp)
+        socket.emit('sdp', localSdp)
+      } catch (error) {
+        console.log(error)
+      }
+    }
+
+    function handleOffer() {
+      socket.on('offer', async offer => {
+        try {
+          await pc.setRemoteDescription(new RTCSessionDescription(offer))
+          await pc.setLocalDescription()
+        } catch (error) {
+          console.log(error)
+        }
+      })
+    }
+    
+  </script>
+</body>
+</html>
