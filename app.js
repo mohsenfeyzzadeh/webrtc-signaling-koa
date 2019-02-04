@@ -22,9 +22,17 @@ io.on('connection', socket => {
       })
     }
   })
-  // sdp
-  socket.on('sdp', sdp => {
+  // offer
+  socket.on('offer', sdp => {
     socket.broadcast.emit('offer', sdp)
+  })
+  // answer
+  socket.on('answer', sdp => {
+    socket.broadcast.emit('answer', sdp)
+  })
+  // icecandidate
+  socket.on('icecandidate', candidate => {
+    socket.broadcast.emit('icecandidate', candidate)
   })
 })
 

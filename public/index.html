@@ -34,18 +34,19 @@
       console.log(error)
     })
 
-    const pc = new RTCPeerConnection()
+    let pc
 
     function join() {
       btJoin.disabled = true
       const name = roomName.value
       socket.emit('join', {name: name})
-      socket.on('join success', () => {
-        console.log("===========join success=============")
-      })
+      socket.on('join success', handleJoinSuccess)
       socket.on('another', () => {
         btCall.disabled = false
       })
+      socket.on('offer', handleOffer)
+      socket.on('answer', handleAnswer)
+      socket.on('icecandidate', handleIceCandidate)
     }
 
     async function call() {
@@ -58,23 +59,40 @@
         pc.addStream(stream)
         const localSdp = await pc.createOffer()
         await pc.setLocalDescription(localSdp)
-        socket.emit('sdp', localSdp)
+        socket.emit('offer', localSdp)
       } catch (error) {
         console.log(error)
       }
     }
 
-    function handleOffer() {
-      socket.on('offer', async offer => {
-        try {
-          await pc.setRemoteDescription(new RTCSessionDescription(offer))
-          await pc.setLocalDescription()
-        } catch (error) {
-          console.log(error)
-        }
-      })
+    function handleJoinSuccess() {
+      console.log("==============join success================")
+      pc = new RTCPeerConnection()
+      pc.onicecandidate = function(ev) {
+        if (!ev.candidate) 
+          throw 'onicecandidate error'
+        socket.emit('icecandidate', ev.candidate)
+      }
+    }
+
+    async function handleOffer(offer) {
+      try {
+        await pc.setRemoteDescription(new RTCSessionDescription(offer))
+        const answer = await pc.createAnswer()
+        await pc.setLocalDescription(answer)
+        socket.emit('answer', answer)
+      } catch (error) {
+        console.log(error)
+      }
     }
     
+    function handleAnswer(answer) {
+      pc.setRemoteDescription(new RTCSessionDescription(answer))
+    }
+
+    async function handleIceCandidate(candidate) {
+      pc.addCandidate(candidate)
+    }
   </script>
 </body>
 </html>
