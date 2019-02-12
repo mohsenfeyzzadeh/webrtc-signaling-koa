@@ -10,8 +10,8 @@
   <input type="text" id="room-name">
   <button id="bt-join" disabled>join</button>
   <button id="bt-call" disabled>call</button>
-  <video id="local-stream"></video>
-  <video id="remote-stream"></video>
+  <video id="local-stream" autoplay muted></video>
+  <video id="remote-stream" autoplay></video>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/2.2.0/socket.io.dev.js"></script>
   <script>
     const roomName = document.getElementById("room-name")
@@ -51,12 +51,6 @@
 
     async function call() {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: true,
-          audio: true
-        })
-        localVideo.srcObject = stream
-        pc.addStream(stream)
         const localSdp = await pc.createOffer()
         await pc.setLocalDescription(localSdp)
         socket.emit('offer', localSdp)
@@ -65,13 +59,26 @@
       }
     }
 
-    function handleJoinSuccess() {
+    async function handleJoinSuccess() {
       console.log("==============join success================")
       pc = new RTCPeerConnection()
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: true
+        })
+        localVideo.srcObject = stream
+        pc.addStream(stream)
+      } catch (error) {
+        console.log(error)
+      }
       pc.onicecandidate = function(ev) {
-        if (!ev.candidate) 
-          throw 'onicecandidate error'
-        socket.emit('icecandidate', ev.candidate)
+        if (ev.candidate) 
+          socket.emit('icecandidate', ev.candidate)
+      }
+      pc.ontrack = function(e) {
+        console.log(e)
+        // remoteVideo.srcObject = e.streams[0]
       }
     }
 
@@ -90,8 +97,10 @@
       pc.setRemoteDescription(new RTCSessionDescription(answer))
     }
 
-    async function handleIceCandidate(candidate) {
-      pc.addCandidate(candidate)
+    function handleIceCandidate(candidate) {
+      pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(error => {
+        console.log(error)
+      })
     }
   </script>
 </body>
