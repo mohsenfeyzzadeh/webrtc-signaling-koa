@@ -34,6 +34,13 @@ io.on('connection', socket => {
   socket.on('icecandidate', candidate => {
     socket.broadcast.emit('icecandidate', candidate)
   })
+  socket.on('leave', roomId => {
+    socket.broadcast.emit('beleft', roomId)
+    socket.leave(roomId)
+  })
+  socket.on('beleft', roomId => {
+    socket.leave(roomId)
+  })
 })
 
 server.listen(3000, () => {

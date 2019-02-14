@@ -7,16 +7,20 @@
   <title>webrtc-demo</title>
 </head>
 <body>
-  <input type="text" id="room-name">
-  <button id="bt-join" disabled>join</button>
-  <button id="bt-call" disabled>call</button>
-  <video id="local-stream" autoplay muted></video>
-  <video id="remote-stream" autoplay></video>
+  <div>
+    <input type="text" id="room-name">
+    <button id="bt-join" disabled>join</button>
+    <button id="bt-call" disabled>call</button>
+    <button id="bt-hangup" disabled>hang up</button>
+  </div>
+  <video id="local-stream" style="width: 480px; height: 360px" autoplay muted></video>
+  <video id="remote-stream" style="width: 480px; height: 360px" autoplay></video>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/2.2.0/socket.io.dev.js"></script>
   <script>
     const roomName = document.getElementById("room-name")
     const btJoin = document.getElementById("bt-join")
     const btCall = document.getElementById("bt-call")
+    const btHangup = document.getElementById("bt-hangup")
     const localVideo = document.getElementById("local-stream")
     const remoteVideo = document.getElementById("remote-stream")
 
@@ -28,6 +32,7 @@
 
     btJoin.addEventListener('click', join)
     btCall.addEventListener('click', call)
+    btHangup.addEventListener('click', hangup)
 
     const socket = io()
     socket.on('custom error', error => {
@@ -35,11 +40,12 @@
     })
 
     let pc
+    let roomId
 
     function join() {
       btJoin.disabled = true
-      const name = roomName.value
-      socket.emit('join', {name: name})
+      roomId = roomName.value
+      socket.emit('join', {name: roomId})
       socket.on('join success', handleJoinSuccess)
       socket.on('another', () => {
         btCall.disabled = false
@@ -47,6 +53,7 @@
       socket.on('offer', handleOffer)
       socket.on('answer', handleAnswer)
       socket.on('icecandidate', handleIceCandidate)
+      socket.on('beleft', handleBeLeft)
     }
 
     async function call() {
@@ -54,8 +61,21 @@
         const localSdp = await pc.createOffer()
         await pc.setLocalDescription(localSdp)
         socket.emit('offer', localSdp)
+        btCall.disabled = true
+        btHangup.disabled = false
       } catch (error) {
         console.log(error)
+      }
+    }
+
+    function hangup() {
+      pc.close()
+      socket.emit('leave', roomId)
+      localVideo.srcObject = null
+      remoteVideo.srcObject = null
+      btHangup.disabled = true
+      if (roomName.value) {
+        btJoin.disabled = false
       }
     }
 
@@ -77,8 +97,9 @@
           socket.emit('icecandidate', ev.candidate)
       }
       pc.ontrack = function(e) {
-        console.log(e)
-        // remoteVideo.srcObject = e.streams[0]
+        btCall.disabled = true
+        btHangup.disabled = false
+        remoteVideo.srcObject = e.streams[0]
       }
     }
 
@@ -94,6 +115,8 @@
     }
     
     function handleAnswer(answer) {
+      btCall.disabled = true
+      btHangup.disabled = false
       pc.setRemoteDescription(new RTCSessionDescription(answer))
     }
 
@@ -101,6 +124,17 @@
       pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(error => {
         console.log(error)
       })
+    }
+
+    function handleBeLeft(roomId) {
+      socket.emit('beleft', roomId)
+      pc.close()
+      localVideo.srcObject = null
+      remoteVideo.srcObject = null
+      btHangup.disabled = true
+      if (roomName.value) {
+        btJoin.disabled = false
+      }
     }
   </script>
 </body>
