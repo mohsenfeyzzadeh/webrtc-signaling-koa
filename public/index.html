@@ -41,6 +41,7 @@
 
     let pc
     let roomId
+    let stream
 
     function join() {
       btJoin.disabled = true
@@ -70,6 +71,9 @@
 
     function hangup() {
       pc.close()
+      stream.getTracks().forEach(track => {
+        track.stop()
+      })
       socket.emit('leave', roomId)
       localVideo.srcObject = null
       remoteVideo.srcObject = null
@@ -83,7 +87,7 @@
       console.log("==============join success================")
       pc = new RTCPeerConnection()
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
+        stream = await navigator.mediaDevices.getUserMedia({
           video: true,
           audio: true
         })
@@ -129,6 +133,9 @@
     function handleBeLeft(roomId) {
       socket.emit('beleft', roomId)
       pc.close()
+      stream.getTracks().forEach(track => {
+        track.stop()
+      })
       localVideo.srcObject = null
       remoteVideo.srcObject = null
       btHangup.disabled = true
