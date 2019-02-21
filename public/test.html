@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="ie=edge">
+  <title>Document</title>
+
+  <style>
+    video {
+      width: 360px;
+      height: 270px;
+    }
+  </style>
+</head>
+
+<body>
+  <script src="https://vuejs.org/js/vue.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/2.2.0/socket.io.dev.js"></script>
+  <script>
+    Vue.component('c-list', {
+      data() {
+        return {
+          call_list: [],
+          local_stream: null
+        }
+      },
+      computed: {
+        stream_callers: function () {
+          return this.call_list.filter(caller => {
+            return caller.stream
+          })
+        }
+      },
+      created() {
+        this.socket = io()
+        this.socket.on('current clients', clients => {
+          this.call_list = clients.map(client => {
+            return { id: client, state: 0 }
+          })
+        })
+
+        this.socket.on('someone connect', id => {
+          this.call_list.push({
+            id: id,
+            state: 0
+          })
+        })
+
+        this.socket.on('someone disconnect', id => {
+          this.call_list = this.call_list.filter(item => {
+            return item.id != id
+          })
+        })
+
+        this.socket.on('disconnect', reason => {
+          this.allClean()
+        })
+
+        this.socket.on('call', this.handleCallin)
+        this.socket.on('call reply', this.handleCallReply)
+        this.socket.on('client offline', () => {
+          alert('对方已离线')
+        })
+        this.socket.on('offer', this.handleOffer)
+        this.socket.on('answer', this.handleAnswer)
+        this.socket.on('icecandidate', this.handleIceCandidate)
+        this.socket.on('hang up', this.handleHangup)
+      },
+      methods: {
+        call(id) {
+          this.socket.emit('call', id)
+        },
+        handleCallin(id) {
+          if (confirm(`${id}想和你通话，是否接受？`)) {
+            this.call_list.forEach(async (caller, i) => {
+              if (caller.id === id) {
+                caller.pc = new RTCPeerConnection()
+                caller.state = 1
+                this.socket.emit('call answer', id, true)
+                caller.pc.onicecandidate = ev => {
+                  this.handleRTCicecandidate(ev, id)
+                }
+                caller.pc.ontrack = e => {
+                  this.handleRTCtrack(e, id, i, caller)
+                }
+              }
+            })
+          } else {
+            this.socket.emit('call answer', id, false)
+          }
+        },
+        handleCallReply(id, answer) {
+          if (!answer) {
+            alert(`${id}拒绝和你通话`)
+          } else {
+            this.call_list.forEach(async (caller, i) => {
+              if (caller.id === id) {
+                caller.pc = new RTCPeerConnection()
+                caller.state = 1
+                if (this.local_stream) {
+                  this.local_stream.getTracks().forEach(track => {
+                    caller.pc.addTrack(track, this.local_stream)
+                  })
+                } else {
+                  try {
+                    this.local_stream = await navigator.mediaDevices.getUserMedia({
+                      video: true,
+                      audio: false
+                    })
+                    this.$refs['local-video'].srcObject = this.local_stream
+                    this.local_stream.getTracks().forEach(track => {
+                      caller.pc.addTrack(track, this.local_stream)
+                    })
+
+                    const localSdp = await caller.pc.createOffer()
+                    await caller.pc.setLocalDescription(new RTCSessionDescription(localSdp))
+                    this.socket.emit('offer', id, localSdp)
+                  } catch (error) {
+                    console.log(error)
+                  }
+                }
+                caller.pc.onicecandidate = ev => {
+                  this.handleRTCicecandidate(ev, id)
+                }
+                caller.pc.ontrack = e => {
+                  this.handleRTCtrack(e, id, i, caller)
+                }
+              }
+            })
+          }
+        },
+        handleOffer(id, sdp) {
+          this.call_list.forEach(async caller => {
+            if (caller.id === id) {
+              try {
+                await caller.pc.setRemoteDescription(new RTCSessionDescription(sdp))
+                if (this.local_stream) {
+                  this.local_stream.getTracks().forEach(track => {
+                    caller.pc.addTrack(track, this.local_stream)
+                  })
+                } else {
+                  this.local_stream = await navigator.mediaDevices.getUserMedia({
+                    video: false,
+                    audio: true
+                  })
+                  this.local_stream.getTracks().forEach(track => {
+                    caller.pc.addTrack(track, this.local_stream)
+                  })
+                  this.$refs['local-video'].srcObject = this.local_stream
+                }
+                const answer = await caller.pc.createAnswer()
+                await caller.pc.setLocalDescription(new RTCSessionDescription(answer))
+                this.socket.emit('answer', id, answer)
+              } catch (error) {
+                console.log(error)
+              }
+            }
+          })
+        },
+        handleAnswer(id, sdp) {
+          this.call_list.forEach(caller => {
+            if (caller.id === id) {
+              caller.pc.setRemoteDescription(new RTCSessionDescription(sdp))
+            }
+          })
+        },
+        handleIceCandidate(id, candidate) {
+          this.call_list.forEach(caller => {
+            if (caller.id === id) {
+              caller.pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(error => {
+                console.log(error)
+              })
+            }
+          })
+        },
+        handleRTCicecandidate(ev, id) {
+          if (ev.candidate) {
+            this.socket.emit('icecandidate', id, ev.candidate)
+          }
+        },
+        handleRTCtrack(e, id, i, caller) {
+          caller.stream = e.streams[0]
+          this.$set(this.call_list, i, caller)
+          this.$nextTick(() => {
+            this.$refs['remote-' + id][0].srcObject = caller.stream
+          })
+        },
+        hangup(id) {
+          this.call_list.forEach((item, i) => {
+            if (item.id == id && item.state) {
+              item.pc.close()
+              this.socket.emit('hang up', id)
+              item.pc = null
+              item.stream = null
+              item.state = 0
+              this.$set(this.call_list, i, item)
+            }
+          })
+        },
+        handleHangup(id) {
+          this.call_list.forEach((item, i) => {
+            if (item.id == id && item.state) {
+              item.pc.close()
+              item.pc = null
+              item.stream = null
+              item.state = 0
+              this.$set(this.call_list, i, item)
+            }
+          })
+        },
+        allClean() {
+          this.call_list.forEach((item, i) => {
+            item.pc.close()
+            item.pc = null
+            item.stream = null
+            item.state = 0
+          })
+          this.call_list = this.call_list.concat()
+        }
+      }
+    })
+  </script>
+
+  <ul id="ul"></ul>
+
+  <div id="app">
+    <c-list inline-template>
+      <div>
+        <ul>
+          <li v-for="acall in call_list" :key="acall.id">
+            <span>{{acall.id}}</span><button v-on:click="acall.state ? hangup(acall.id) : call(acall.id)">{{acall.state ? 'hangup' : 'call'}}</button>
+          </li>
+        </ul>
+        <video ref="local-video" autoplay muted></video>
+        <video v-for="caller in stream_callers" :key="caller.id" :ref="'remote-' + caller.id" autoplay></video>
+      </div>
+    </c-list>
+  </div>
+
+  <script>
+    const vm = new Vue({
+      el: '#app'
+    })
+  </script>
+</body>
+
+</html>
