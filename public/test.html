@@ -106,15 +106,18 @@
                 } else {
                   try {
                     this.local_stream = await navigator.mediaDevices.getUserMedia({
-                      video: true,
-                      audio: false
+                      video: false,
+                      audio: true
                     })
                     this.$refs['local-video'].srcObject = this.local_stream
                     this.local_stream.getTracks().forEach(track => {
                       caller.pc.addTrack(track, this.local_stream)
                     })
 
-                    const localSdp = await caller.pc.createOffer()
+                    const localSdp = await caller.pc.createOffer({
+                      offerToReceiveAudio: true,
+                      offerToReceiveVideo: true
+                    })
                     await caller.pc.setLocalDescription(new RTCSessionDescription(localSdp))
                     this.socket.emit('offer', id, localSdp)
                   } catch (error) {
@@ -142,7 +145,7 @@
                   })
                 } else {
                   this.local_stream = await navigator.mediaDevices.getUserMedia({
-                    video: false,
+                    video: true,
                     audio: true
                   })
                   this.local_stream.getTracks().forEach(track => {
@@ -160,6 +163,7 @@
           })
         },
         handleAnswer(id, sdp) {
+          console.log(sdp)
           this.call_list.forEach(caller => {
             if (caller.id === id) {
               caller.pc.setRemoteDescription(new RTCSessionDescription(sdp))
@@ -181,11 +185,16 @@
           }
         },
         handleRTCtrack(e, id, i, caller) {
-          caller.stream = e.streams[0]
-          this.$set(this.call_list, i, caller)
-          this.$nextTick(() => {
-            this.$refs['remote-' + id][0].srcObject = caller.stream
-          })
+          console.log(e.streams[0].getTracks())
+          // if (this.call_list[i].stream) {
+          //   this.call_list[i].stream.addTrack(e.track)
+          // } else {
+            caller.stream = e.streams[0]
+            this.$set(this.call_list, i, caller)
+            this.$nextTick(() => {
+              this.$refs['remote-' + id][0].srcObject = caller.stream
+            })
+          // }
         },
         hangup(id) {
           this.call_list.forEach((item, i) => {
