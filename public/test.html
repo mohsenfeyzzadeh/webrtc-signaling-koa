@@ -113,16 +113,19 @@
                     this.local_stream.getTracks().forEach(track => {
                       caller.pc.addTrack(track, this.local_stream)
                     })
-
-                    const localSdp = await caller.pc.createOffer({
-                      offerToReceiveAudio: true,
-                      offerToReceiveVideo: true
-                    })
-                    await caller.pc.setLocalDescription(new RTCSessionDescription(localSdp))
-                    this.socket.emit('offer', id, localSdp)
                   } catch (error) {
                     console.log(error)
                   }
+                }
+                try {
+                  const localSdp = await caller.pc.createOffer({
+                    offerToReceiveAudio: true,
+                    offerToReceiveVideo: true
+                  })
+                  await caller.pc.setLocalDescription(new RTCSessionDescription(localSdp))
+                  this.socket.emit('offer', id, localSdp)
+                } catch (error) {
+                  console.log(error)
                 }
                 caller.pc.onicecandidate = ev => {
                   this.handleRTCicecandidate(ev, id)
@@ -163,7 +166,6 @@
           })
         },
         handleAnswer(id, sdp) {
-          console.log(sdp)
           this.call_list.forEach(caller => {
             if (caller.id === id) {
               caller.pc.setRemoteDescription(new RTCSessionDescription(sdp))
@@ -185,15 +187,14 @@
           }
         },
         handleRTCtrack(e, id, i, caller) {
-          console.log(e.streams[0].getTracks())
           // if (this.call_list[i].stream) {
           //   this.call_list[i].stream.addTrack(e.track)
           // } else {
-            caller.stream = e.streams[0]
-            this.$set(this.call_list, i, caller)
-            this.$nextTick(() => {
-              this.$refs['remote-' + id][0].srcObject = caller.stream
-            })
+          caller.stream = e.streams[0]
+          this.$set(this.call_list, i, caller)
+          this.$nextTick(() => {
+            this.$refs['remote-' + id][0].srcObject = caller.stream
+          })
           // }
         },
         hangup(id) {
@@ -239,7 +240,8 @@
       <div>
         <ul>
           <li v-for="acall in call_list" :key="acall.id">
-            <span>{{acall.id}}</span><button v-on:click="acall.state ? hangup(acall.id) : call(acall.id)">{{acall.state ? 'hangup' : 'call'}}</button>
+            <span>{{acall.id}}</span><button
+              v-on:click="acall.state ? hangup(acall.id) : call(acall.id)">{{acall.state ? 'hangup' : 'call'}}</button>
           </li>
         </ul>
         <video ref="local-video" autoplay muted></video>
