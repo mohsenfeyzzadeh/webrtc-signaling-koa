@@ -74,6 +74,10 @@ io.on('connection', socket => {
     signal_utils.logInfo(`[hang up]-${socket.id}->${id}`)
     io.to(id).emit('hang up', socket.id)
   })
+
+  socket.on('message', (id, message) => {
+    io.to(id).emit('message', socket.id, message)
+  })
 })
 
 server.listen(3000)

@@ -37,14 +37,15 @@
         this.socket = io()
         this.socket.on('current clients', clients => {
           this.call_list = clients.map(client => {
-            return { id: client, state: 0 }
+            return { id: client, state: 0, text: '' }
           })
         })
 
         this.socket.on('someone connect', id => {
           this.call_list.push({
             id: id,
-            state: 0
+            state: 0,
+            text: ''
           })
         })
 
@@ -228,6 +229,9 @@
             item.state = 0
           })
           this.call_list = this.call_list.concat()
+        },
+        sendMessage(acall) {
+          this.socket.emit('message', acall.id, acall.text)
         }
       }
     })
@@ -242,6 +246,7 @@
           <li v-for="acall in call_list" :key="acall.id">
             <span>{{acall.id}}</span><button
               v-on:click="acall.state ? hangup(acall.id) : call(acall.id)">{{acall.state ? 'hangup' : 'call'}}</button>
+            <input type="text" v-model="acall.text"><button v-on:click="sendMessage(acall)">send</button>
           </li>
         </ul>
         <video ref="local-video" autoplay muted></video>
