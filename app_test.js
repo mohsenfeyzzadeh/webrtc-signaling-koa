@@ -43,6 +43,10 @@ io.on('connection', socket => {
     socket.broadcast.emit('someone disconnect', socket.id)
   })
 
+  socket.on('custom error', (id, error) => {
+    io.to(id).emit('custom error', error)
+  })
+
   socket.on('call', id => {
     signal_utils.logInfo(`[call]-${socket.id}->${id}`)
     _isIdExist(id).then(isExist => {
@@ -75,9 +79,17 @@ io.on('connection', socket => {
     io.to(id).emit('hang up', socket.id)
   })
 
-  socket.on('message', (id, message) => {
-    io.to(id).emit('message', socket.id, message)
+  socket.on('message', (id, data) => {
+    io.to(id).emit('message', socket.id, data)
   })
+
+  // socket.on('add audio', id => {
+  //   io.to(id).emit('add audio', socket.id)
+  // })
+
+  // socket.on('remove audio', id => {
+  //   io.to(id).emit('remove audio', socket.id)
+  // })
 })
 
-server.listen(3000)
+server.listen(8996)
